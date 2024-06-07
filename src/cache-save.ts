@@ -59,7 +59,7 @@ async function saveCache(packageManager: string) {
     return;
   }
 
-  let cacheId = 0;
+  let cacheId = '';
 
   try {
     cacheId = await cache.saveCache(cachePaths, primaryKey);
@@ -69,7 +69,7 @@ async function saveCache(packageManager: string) {
     return;
   }
 
-  if (cacheId == -1) {
+  if (cacheId == '') {
     return;
   }
   core.info(`Cache saved with the key: ${primaryKey}`);
