@@ -86,9 +86,9 @@ async function run() {
     process.env['RUNNER_TOOL_CACHE'] = process.env['AGENT_TOOLSDIRECTORY'];
   }
 
-  // core.debug(
-  //   `Python is expected to be installed into ${process.env['RUNNER_TOOL_CACHE']}`
-  // );
+  core.debug(
+    `Python is expected to be installed into ${process.env['RUNNER_TOOL_CACHE']}`
+  );
   try {
     const versions = resolveVersionInput();
     const checkLatest = core.getBooleanInput('check-latest');
@@ -145,26 +145,18 @@ async function run() {
       const cache = core.getInput('cache');
       if (cache && isCacheFeatureAvailable()) {
         await cacheDependencies(cache, pythonVersion);
-        core.debug('Completed cache dependencies');
       }
     } else {
       core.warning(
         'The `python-version` input is not set.  The version of Python currently in `PATH` will be used.'
       );
     }
-    core.debug('Before matchers path');
     const matchersPath = path.join(__dirname, '../..', '.github');
-    core.debug('After matchers path');
     core.info(`##[add-matcher]${path.join(matchersPath, 'python.json')}`);
   } catch (err) {
     core.setFailed((err as Error).message);
   }
-
-  core.debug('Before process exit');
-  setTimeout(() => {
-    why();
-  }, 3000);
-  // process.exit(0);
+  process.exit(0);
 }
 
 run();

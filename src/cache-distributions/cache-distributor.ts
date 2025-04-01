@@ -64,8 +64,6 @@ abstract class CacheDistributor {
     } else {
       core.info(`${this.packageManager} cache is not found`);
     }
-    core.debug(`matchedKey: ${matchedKey}`);
-    core.debug(`primaryKey: ${primaryKey}`);
     core.setOutput('cache-hit', matchedKey === primaryKey);
   }
 }
