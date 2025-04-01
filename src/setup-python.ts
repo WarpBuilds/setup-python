@@ -142,13 +142,16 @@ async function run() {
       const cache = core.getInput('cache');
       if (cache && isCacheFeatureAvailable()) {
         await cacheDependencies(cache, pythonVersion);
+        core.debug('Completed cache dependencies');
       }
     } else {
       core.warning(
         'The `python-version` input is not set.  The version of Python currently in `PATH` will be used.'
       );
     }
+    core.debug('Before matchers path');
     const matchersPath = path.join(__dirname, '../..', '.github');
+    core.debug('After matchers path');
     core.info(`##[add-matcher]${path.join(matchersPath, 'python.json')}`);
   } catch (err) {
     core.setFailed((err as Error).message);
