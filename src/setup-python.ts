@@ -161,9 +161,9 @@ async function run() {
   }
 
   core.debug('Before process exit');
-  setImmediate(() => {
+  setTimeout(() => {
     why();
-  });
+  }, 3000);
   // process.exit(0);
 }
 
