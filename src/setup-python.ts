@@ -1,4 +1,3 @@
-import why from 'why-is-node-running';
 import * as core from '@actions/core';
 import * as finder from './find-python';
 import * as finderPyPy from './find-pypy';
