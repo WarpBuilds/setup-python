@@ -10,6 +10,7 @@ on:
       - releases/*
     paths-ignore:
       - '**.md'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -20,8 +21,30 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ['3.9', 'pypy-3.7-v7.x']
+        os:
+          [
+            ubuntu-latest,
+            ubuntu-24.04-arm,
+            ubuntu-22.04,
+            ubuntu-22.04-arm,
+            windows-latest,
+            macos-latest,
+            macos-13
+          ]
+        python-version:
+          [
+            '3.9',
+            'pypy-3.9-v7.x',
+            '3.10',
+            'pypy-3.10-v7.x',
+            '3.11',
+            'pypy-3.11-v7.x',
+            '3.12',
+            '3.13'
+          ]
+        exclude:
+          - os: windows-latest
+            python-version: pypy-3.11-v7.x
     steps:
       - uses: actions/checkout@v4
       - name: Setup Python
@@ -38,8 +61,25 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ['3.9', 'pypy-3.9-v7.x']
+        os:
+          [
+            ubuntu-latest,
+            ubuntu-24.04-arm,
+            ubuntu-22.04,
+            ubuntu-22.04-arm,
+            windows-latest,
+            macos-latest,
+            macos-13
+          ]
+        python-version:
+          ['3.10', 'pypy-3.10-v7.x', '3.11', 'pypy-3.11-v7.x', '3.12', '3.13']
+        exclude:
+          - os: windows-latest
+            python-version: pypy-3.11-v7.x
+          - os: ubuntu-22.04
+            python-version: pypy-3.11-v7.x
+          - os: ubuntu-22.04-arm
+            python-version: pypy-3.11-v7.x
     steps:
       - uses: actions/checkout@v4
       - name: Setup Python
@@ -74,8 +114,27 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ['3.9', 'pypy-3.8']
+        os:
+          [
+            ubuntu-latest,
+            ubuntu-24.04-arm,
+            ubuntu-22.04,
+            ubuntu-22.04-arm,
+            windows-latest,
+            macos-latest,
+            macos-13
+          ]
+        python-version:
+          [
+            '3.9',
+            'pypy-3.9-v7.x',
+            '3.10',
+            'pypy-3.10-v7.x',
+            '3.11',
+            'pypy-3.11-v7.x',
+            '3.12',
+            '3.13'
+          ]
     steps:
       - uses: actions/checkout@v4
       - name: Install poetry
@@ -88,16 +147,38 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: 'poetry'
       - name: Install dependencies
-        run: poetry install
+        run: poetry install --no-root
 
   python-pip-dependencies-caching-path:
-    name: Test pip (Python ${{ matrix.python-version}}, ${{ matrix.os }})
+    name: Test pip (Python ${{ matrix.python-version}}, ${{ matrix.os }}, caching path)
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ['3.9', 'pypy-3.7-v7.x']
+        os:
+          [
+            ubuntu-latest,
+            ubuntu-24.04-arm,
+            ubuntu-22.04,
+            ubuntu-22.04-arm,
+            windows-latest,
+            macos-latest,
+            macos-13
+          ]
+        python-version:
+          [
+            '3.9',
+            'pypy-3.9-v7.x',
+            '3.10',
+            'pypy-3.10-v7.x',
+            '3.11',
+            'pypy-3.11-v7.x',
+            '3.12',
+            '3.13'
+          ]
+        exclude:
+          - os: windows-latest
+            python-version: pypy-3.11-v7.x
     steps:
       - uses: actions/checkout@v4
       - name: Setup Python
@@ -110,13 +191,32 @@ jobs:
         run: pip install numpy pandas requests
 
   python-pipenv-dependencies-caching-path:
-    name: Test pipenv (Python ${{ matrix.python-version}}, ${{ matrix.os }})
+    name: Test pipenv (Python ${{ matrix.python-version}}, ${{ matrix.os }}, caching path)
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ['3.9', 'pypy-3.9-v7.x']
+        os:
+          [
+            ubuntu-latest,
+            ubuntu-24.04-arm,
+            ubuntu-22.04,
+            ubuntu-22.04-arm,
+            windows-latest,
+            macos-latest,
+            macos-13
+          ]
+        python-version:
+          ['3.10', 'pypy-3.10-v7.x', '3.11', 'pypy-3.11-v7.x', '3.12', '3.13']
+        exclude:
+          - os: windows-latest
+            python-version: pypy-3.11-v7.x
+          - os: ubuntu-22.04
+            python-version: pypy-3.11-v7.x
+          - os: ubuntu-22.04-arm
+            python-version: pypy-3.10-v7.x
+          - os: ubuntu-22.04-arm
+            python-version: pypy-3.11-v7.x
     steps:
       - uses: actions/checkout@v4
       - name: Setup Python
