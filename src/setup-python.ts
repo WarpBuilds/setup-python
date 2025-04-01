@@ -86,9 +86,9 @@ async function run() {
     process.env['RUNNER_TOOL_CACHE'] = process.env['AGENT_TOOLSDIRECTORY'];
   }
 
-  core.debug(
-    `Python is expected to be installed into ${process.env['RUNNER_TOOL_CACHE']}`
-  );
+  // core.debug(
+  //   `Python is expected to be installed into ${process.env['RUNNER_TOOL_CACHE']}`
+  // );
   try {
     const versions = resolveVersionInput();
     const checkLatest = core.getBooleanInput('check-latest');
