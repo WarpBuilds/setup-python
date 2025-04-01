@@ -158,6 +158,9 @@ async function run() {
   } catch (err) {
     core.setFailed((err as Error).message);
   }
+
+  core.debug('Before process exit');
+  process.exit(0);
 }
 
 run();
