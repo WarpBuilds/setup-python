@@ -12,7 +12,11 @@ import {
   getVersionInputFromFile,
   getVersionInputFromPlainFile,
   getVersionInputFromTomlFile,
-  getNextPageUrl
+  getNextPageUrl,
+  isGhes,
+  IS_WINDOWS,
+  getDownloadFileName,
+  getVersionInputFromToolVersions
 } from '../src/utils';
 
 jest.mock('@actions/cache');
@@ -136,6 +140,82 @@ describe('Version from file test', () => {
       expect(_fn(pythonVersionFilePath)).toEqual([]);
     }
   );
+  it.each([getVersionInputFromToolVersions])(
+    'Version from .tool-versions',
+    async _fn => {
+      const toolVersionFileName = '.tool-versions';
+      const toolVersionFilePath = path.join(tempDir, toolVersionFileName);
+      const toolVersionContent = 'python 3.9.10\nnodejs 16';
+      fs.writeFileSync(toolVersionFilePath, toolVersionContent);
+      expect(_fn(toolVersionFilePath)).toEqual(['3.9.10']);
+    }
+  );
+
+  it.each([getVersionInputFromToolVersions])(
+    'Version from .tool-versions with comment',
+    async _fn => {
+      const toolVersionFileName = '.tool-versions';
+      const toolVersionFilePath = path.join(tempDir, toolVersionFileName);
+      const toolVersionContent = '# python 3.8\npython 3.9';
+      fs.writeFileSync(toolVersionFilePath, toolVersionContent);
+      expect(_fn(toolVersionFilePath)).toEqual(['3.9']);
+    }
+  );
+
+  it.each([getVersionInputFromToolVersions])(
+    'Version from .tool-versions with whitespace',
+    async _fn => {
+      const toolVersionFileName = '.tool-versions';
+      const toolVersionFilePath = path.join(tempDir, toolVersionFileName);
+      const toolVersionContent = '  python   3.10  ';
+      fs.writeFileSync(toolVersionFilePath, toolVersionContent);
+      expect(_fn(toolVersionFilePath)).toEqual(['3.10']);
+    }
+  );
+
+  it.each([getVersionInputFromToolVersions])(
+    'Version from .tool-versions with v prefix',
+    async _fn => {
+      const toolVersionFileName = '.tool-versions';
+      const toolVersionFilePath = path.join(tempDir, toolVersionFileName);
+      const toolVersionContent = 'python v3.9.10';
+      fs.writeFileSync(toolVersionFilePath, toolVersionContent);
+      expect(_fn(toolVersionFilePath)).toEqual(['3.9.10']);
+    }
+  );
+
+  it.each([getVersionInputFromToolVersions])(
+    'Version from .tool-versions with pypy version',
+    async _fn => {
+      const toolVersionFileName = '.tool-versions';
+      const toolVersionFilePath = path.join(tempDir, toolVersionFileName);
+      const toolVersionContent = 'python pypy3.10-7.3.14';
+      fs.writeFileSync(toolVersionFilePath, toolVersionContent);
+      expect(_fn(toolVersionFilePath)).toEqual(['pypy3.10-7.3.14']);
+    }
+  );
+
+  it.each([getVersionInputFromToolVersions])(
+    'Version from .tool-versions with alpha Releases',
+    async _fn => {
+      const toolVersionFileName = '.tool-versions';
+      const toolVersionFilePath = path.join(tempDir, toolVersionFileName);
+      const toolVersionContent = 'python 3.14.0a5t';
+      fs.writeFileSync(toolVersionFilePath, toolVersionContent);
+      expect(_fn(toolVersionFilePath)).toEqual(['3.14.0a5t']);
+    }
+  );
+
+  it.each([getVersionInputFromToolVersions])(
+    'Version from .tool-versions with dev suffix',
+    async _fn => {
+      const toolVersionFileName = '.tool-versions';
+      const toolVersionFilePath = path.join(tempDir, toolVersionFileName);
+      const toolVersionContent = 'python 3.14t-dev';
+      fs.writeFileSync(toolVersionFilePath, toolVersionContent);
+      expect(_fn(toolVersionFilePath)).toEqual(['3.14t-dev']);
+    }
+  );
 });
 
 describe('getNextPageUrl', () => {
@@ -157,5 +237,77 @@ describe('getNextPageUrl', () => {
     const page2Links =
       '<https://api.github.com/repositories/129883600/releases?page=1>; rel="prev", <https://api.github.com/repositories/129883600/releases?page=1>; rel="first"';
     expect(getNextPageUrl(generateResponse(page2Links))).toBeNull();
+  });
+});
+
+describe('getDownloadFileName', () => {
+  const originalEnv = process.env;
+  const tempDir = path.join(__dirname, 'runner', 'temp');
+
+  beforeEach(() => {
+    process.env = {...originalEnv};
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  it('should return the correct path on Windows', () => {
+    if (IS_WINDOWS) {
+      process.env['RUNNER_TEMP'] = tempDir;
+      const downloadUrl =
+        'https://github.com/actions/sometool/releases/tag/1.2.3-20200402.6/sometool-1.2.3-win32-x64.zip';
+      const expectedPath = path.join(
+        process.env.RUNNER_TEMP,
+        path.basename(downloadUrl)
+      );
+      expect(getDownloadFileName(downloadUrl)).toBe(expectedPath);
+    }
+  });
+
+  it('should return undefined on non-Windows', () => {
+    if (!IS_WINDOWS) {
+      const downloadUrl =
+        'https://github.com/actions/sometool/releases/tag/1.2.3-20200402.6/sometool-1.2.3-linux-x64.tar.gz';
+      expect(getDownloadFileName(downloadUrl)).toBeUndefined();
+    }
+  });
+});
+
+describe('isGhes', () => {
+  const pristineEnv = process.env;
+
+  beforeEach(() => {
+    jest.resetModules();
+    process.env = {...pristineEnv};
+  });
+
+  afterAll(() => {
+    process.env = pristineEnv;
+  });
+
+  it('returns false when the GITHUB_SERVER_URL environment variable is not defined', async () => {
+    delete process.env['GITHUB_SERVER_URL'];
+    expect(isGhes()).toBeFalsy();
+  });
+
+  it('returns false when the GITHUB_SERVER_URL environment variable is set to github.com', async () => {
+    process.env['GITHUB_SERVER_URL'] = 'https://github.com';
+    expect(isGhes()).toBeFalsy();
+  });
+
+  it('returns false when the GITHUB_SERVER_URL environment variable is set to a GitHub Enterprise Cloud-style URL', async () => {
+    process.env['GITHUB_SERVER_URL'] = 'https://contoso.ghe.com';
+    expect(isGhes()).toBeFalsy();
+  });
+
+  it('returns false when the GITHUB_SERVER_URL environment variable has a .localhost suffix', async () => {
+    process.env['GITHUB_SERVER_URL'] = 'https://mock-github.localhost';
+    expect(isGhes()).toBeFalsy();
+  });
+
+  it('returns true when the GITHUB_SERVER_URL environment variable is set to some other URL', async () => {
+    process.env['GITHUB_SERVER_URL'] = 'https://src.onpremise.fabrikam.com';
+    expect(isGhes()).toBeTruthy();
   });
 });

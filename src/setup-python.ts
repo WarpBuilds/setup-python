@@ -1,3 +1,4 @@
+import why from 'why-is-node-running';
 import * as core from '@actions/core';
 import * as finder from './find-python';
 import * as finderPyPy from './find-pypy';
@@ -92,6 +93,7 @@ async function run() {
     const versions = resolveVersionInput();
     const checkLatest = core.getBooleanInput('check-latest');
     const allowPreReleases = core.getBooleanInput('allow-prereleases');
+    const freethreaded = core.getBooleanInput('freethreaded');
 
     if (versions.length) {
       let pythonVersion = '';
@@ -132,7 +134,8 @@ async function run() {
             arch,
             updateEnvironment,
             checkLatest,
-            allowPreReleases
+            allowPreReleases,
+            freethreaded
           );
           pythonVersion = installed.version;
           core.info(`Successfully set up ${installed.impl} (${pythonVersion})`);
@@ -153,6 +156,7 @@ async function run() {
   } catch (err) {
     core.setFailed((err as Error).message);
   }
+  process.exit(0);
 }
 
 run();
