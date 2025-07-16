@@ -420,9 +420,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.deleteCache = exports.saveCache = exports.reserveCache = exports.downloadCacheStreaming = exports.downloadCacheSingleThread = exports.downloadCache = exports.getCacheEntry = exports.getCacheVersion = void 0;
 const core = __importStar(__nccwpck_require__(37484));
@@ -431,7 +428,6 @@ const http_client_1 = __nccwpck_require__(54844);
 const auth_1 = __nccwpck_require__(44552);
 const crypto = __importStar(__nccwpck_require__(76982));
 const utils = __importStar(__nccwpck_require__(98299));
-const os_1 = __importDefault(__nccwpck_require__(70857));
 const downloadUtils_1 = __nccwpck_require__(75067);
 const requestUtils_1 = __nccwpck_require__(32846);
 const storage_1 = __nccwpck_require__(28525);
@@ -607,8 +603,15 @@ function downloadCache(provider, archiveLocation, archivePath, gcsToken) {
         switch (provider) {
             case 's3':
                 {
-                    const numberOfConnections = 2 + os_1.default.cpus().length;
-                    yield (0, downloadUtils_1.downloadCacheMultiConnection)(archiveLocation, archivePath, Math.min(numberOfConnections, 30));
+                    // const numberOfConnections = 2 + os.cpus().length
+                    // await downloadCacheMultiConnection(
+                    //   archiveLocation,
+                    //   archivePath,
+                    //   Math.min(numberOfConnections, 30)
+                    // )
+                    yield (0, downloadUtils_1.downloadCacheHttpClientConcurrent)(archiveLocation, archivePath, {
+                        timeoutInMs: 30000
+                    });
                 }
                 break;
             case 'gcs': {
@@ -1125,7 +1128,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.getDownloadCommandPipeForWget = exports.downloadCacheStreamingGCP = exports.downloadCacheGCP = exports.downloadCacheMultipartGCP = exports.downloadCacheMultiConnection = exports.downloadCacheHttpClient = exports.DownloadProgress = void 0;
+exports.downloadCacheHttpClientConcurrent = exports.getDownloadCommandPipeForWget = exports.downloadCacheStreamingGCP = exports.downloadCacheGCP = exports.downloadCacheMultipartGCP = exports.downloadCacheMultiConnection = exports.downloadCacheHttpClient = exports.DownloadProgress = void 0;
 const core = __importStar(__nccwpck_require__(37484));
 const http_client_1 = __nccwpck_require__(54844);
 const fs = __importStar(__nccwpck_require__(79896));
@@ -1266,7 +1269,7 @@ exports.DownloadProgress = DownloadProgress;
 function downloadCacheHttpClient(archiveLocation, archivePath) {
     return __awaiter(this, void 0, void 0, function* () {
         const writeStream = fs.createWriteStream(archivePath);
-        const httpClient = new http_client_1.HttpClient('actions/cache');
+        const httpClient = new http_client_1.HttpClient('Warpbuilds/cache');
         const downloadResponse = yield (0, requestUtils_1.retryHttpClientResponse)('downloadCache', () => __awaiter(this, void 0, void 0, function* () { return httpClient.get(archiveLocation); }));
         // Abort download if no traffic received over the socket.
         downloadResponse.message.socket.setTimeout(constants_1.SocketTimeout, () => {
@@ -1302,7 +1305,7 @@ function downloadCacheMultiConnection(archiveLocation, archivePath, connections)
         let downloadProgress = null;
         try {
             fileHandle = yield fs.promises.open(archivePath, 'w+');
-            const httpClient = new http_client_1.HttpClient('actions/cache');
+            const httpClient = new http_client_1.HttpClient('Warpbuilds/cache');
             //Request 1 byte to get total content size
             const metadataResponse = yield (0, requestUtils_1.retryHttpClientResponse)('downloadCache', () => __awaiter(this, void 0, void 0, function* () {
                 return httpClient.get(archiveLocation, {
@@ -1432,6 +1435,126 @@ function getDownloadCommandPipeForWget(url) {
     return (0, child_process_1.spawn)('wget', ['-qO', '-', url]);
 }
 exports.getDownloadCommandPipeForWget = getDownloadCommandPipeForWget;
+// Newer download tech
+/**
+ * Download the cache using the Actions toolkit http-client concurrently
+ *
+ * @param archiveLocation the URL for the cache
+ * @param archivePath the local path where the cache is saved
+ */
+function downloadCacheHttpClientConcurrent(archiveLocation, archivePath, options) {
+    var _a;
+    return __awaiter(this, void 0, void 0, function* () {
+        const archiveDescriptor = yield fs.promises.open(archivePath, 'w');
+        const httpClient = new http_client_1.HttpClient('Warpbuilds/cache', undefined, {
+            socketTimeout: options.timeoutInMs,
+            keepAlive: true
+        });
+        try {
+            const res = yield (0, requestUtils_1.retryHttpClientResponse)('downloadCacheMetadata', () => __awaiter(this, void 0, void 0, function* () { return yield httpClient.request('HEAD', archiveLocation, null, {}); }));
+            const lengthHeader = res.message.headers['content-length'];
+            if (lengthHeader === undefined || lengthHeader === null) {
+                throw new Error('Content-Length not found on blob response');
+            }
+            const length = parseInt(lengthHeader);
+            if (Number.isNaN(length)) {
+                throw new Error(`Could not interpret Content-Length: ${length}`);
+            }
+            const downloads = [];
+            const blockSize = 4 * 1024 * 1024;
+            for (let offset = 0; offset < length; offset += blockSize) {
+                const count = Math.min(blockSize, length - offset);
+                downloads.push({
+                    offset,
+                    promiseGetter: () => __awaiter(this, void 0, void 0, function* () {
+                        return yield downloadSegmentRetry(httpClient, archiveLocation, offset, count);
+                    })
+                });
+            }
+            // reverse to use .pop instead of .shift
+            downloads.reverse();
+            let actives = 0;
+            let bytesDownloaded = 0;
+            const progress = new DownloadProgress(length);
+            progress.startDisplayTimer();
+            const progressFn = progress.onProgress();
+            const activeDownloads = [];
+            let nextDownload;
+            const waitAndWrite = () => __awaiter(this, void 0, void 0, function* () {
+                const segment = yield Promise.race(Object.values(activeDownloads));
+                yield archiveDescriptor.write(segment.buffer, 0, segment.count, segment.offset);
+                actives--;
+                delete activeDownloads[segment.offset];
+                bytesDownloaded += segment.count;
+                progressFn({ loadedBytes: bytesDownloaded });
+            });
+            while ((nextDownload = downloads.pop())) {
+                activeDownloads[nextDownload.offset] = nextDownload.promiseGetter();
+                actives++;
+                if (actives >= ((_a = options.downloadConcurrency) !== null && _a !== void 0 ? _a : 10)) {
+                    yield waitAndWrite();
+                }
+            }
+            while (actives > 0) {
+                yield waitAndWrite();
+            }
+        }
+        finally {
+            httpClient.dispose();
+            yield archiveDescriptor.close();
+        }
+    });
+}
+exports.downloadCacheHttpClientConcurrent = downloadCacheHttpClientConcurrent;
+function downloadSegmentRetry(httpClient, archiveLocation, offset, count) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const retries = 5;
+        let failures = 0;
+        while (true) {
+            try {
+                const timeout = 30000;
+                const result = yield promiseWithTimeout(timeout, downloadSegment(httpClient, archiveLocation, offset, count));
+                if (typeof result === 'string') {
+                    throw new Error('downloadSegmentRetry failed due to timeout');
+                }
+                return result;
+            }
+            catch (err) {
+                if (failures >= retries) {
+                    throw err;
+                }
+                failures++;
+            }
+        }
+    });
+}
+function downloadSegment(httpClient, archiveLocation, offset, count) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const partRes = yield (0, requestUtils_1.retryHttpClientResponse)('downloadCachePart', () => __awaiter(this, void 0, void 0, function* () {
+            return yield httpClient.get(archiveLocation, {
+                Range: `bytes=${offset}-${offset + count - 1}`
+            });
+        }));
+        if (!partRes.readBodyBuffer) {
+            throw new Error('Expected HttpClientResponse to implement readBodyBuffer');
+        }
+        return {
+            offset,
+            count,
+            buffer: yield partRes.readBodyBuffer()
+        };
+    });
+}
+const promiseWithTimeout = (timeoutMs, promise) => __awaiter(void 0, void 0, void 0, function* () {
+    let timeoutHandle;
+    const timeoutPromise = new Promise(resolve => {
+        timeoutHandle = setTimeout(() => resolve('timeout'), timeoutMs);
+    });
+    return Promise.race([promise, timeoutPromise]).then(result => {
+        clearTimeout(timeoutHandle);
+        return result;
+    });
+});
 //# sourceMappingURL=downloadUtils.js.map
 
 /***/ }),
