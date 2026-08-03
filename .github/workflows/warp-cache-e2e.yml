@@ -11,6 +11,9 @@ on:
       - '**.md'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   save:
     name: save (${{ matrix.os }})
@@ -26,16 +29,20 @@ jobs:
           ]
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       # The cache key is derived from this file's hash, so a per-run value
       # guarantees a fresh key and a genuine miss -> save -> hit round trip.
       - name: Write run-unique requirements file
         shell: bash
+        env:
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
           mkdir -p warp-fixture
           printf '# warp-cache-e2e %s-%s\nsix==1.16.0\n' \
-            "${{ github.run_id }}" "${{ github.run_attempt }}" \
-            > warp-fixture/requirements.txt
+            "$RUN_ID" "$RUN_ATTEMPT" > warp-fixture/requirements.txt
 
       - name: Setup Python
         id: setup
@@ -47,9 +54,11 @@ jobs:
 
       - name: Assert cache miss on a fresh key
         shell: bash
+        env:
+          CACHE_HIT: ${{ steps.setup.outputs.cache-hit }}
         run: |
-          if [ "${{ steps.setup.outputs.cache-hit }}" != "false" ]; then
-            echo "expected a miss on a run-unique key, got cache-hit=${{ steps.setup.outputs.cache-hit }}"
+          if [ "$CACHE_HIT" != "false" ]; then
+            echo "expected a miss on a run-unique key, got cache-hit=$CACHE_HIT"
             exit 1
           fi
 
@@ -73,14 +82,18 @@ jobs:
           ]
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - name: Write the same run-unique requirements file
         shell: bash
+        env:
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
           mkdir -p warp-fixture
           printf '# warp-cache-e2e %s-%s\nsix==1.16.0\n' \
-            "${{ github.run_id }}" "${{ github.run_attempt }}" \
-            > warp-fixture/requirements.txt
+            "$RUN_ID" "$RUN_ATTEMPT" > warp-fixture/requirements.txt
 
       - name: Setup Python
         id: setup
@@ -92,8 +105,10 @@ jobs:
 
       - name: Assert the cache saved by the save job was restored
         shell: bash
+        env:
+          CACHE_HIT: ${{ steps.setup.outputs.cache-hit }}
         run: |
-          if [ "${{ steps.setup.outputs.cache-hit }}" != "true" ]; then
+          if [ "$CACHE_HIT" != "true" ]; then
             echo "expected an exact-key hit on the cache saved by the save job"
             exit 1
           fi
