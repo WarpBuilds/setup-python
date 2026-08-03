@@ -1,6 +1,6 @@
 ---
 name: "@actions/cache"
-version: 2.0.0-0
+version: 2.0.0-1
 type: npm
 summary: Cache client library for WarpBuild's cache service
 homepage: https://github.com/WarpBuilds/warp-cache
